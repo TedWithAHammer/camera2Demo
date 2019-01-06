@@ -8,40 +8,83 @@ import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.view.Surface
 import android.view.TextureView
+import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var cameraManager: CameraManager
     private var cameraList: Array<String>? = null
-    private lateinit var backgroudThread: HandlerThread
-    private lateinit var backgroudHandler: Handler
+    private lateinit var backgroundThread: HandlerThread
+    private lateinit var backgroundHandler: Handler
     private lateinit var cameraDevice: CameraDevice
+    private lateinit var surfaceTexture: SurfaceTexture
+    private lateinit var cameraCaptureSession: CameraCaptureSession
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        initWidget()
+    }
+
+    private fun initWidget() {
+        surfaceTexture = tv_camera.surfaceTexture
+        initCamera()
     }
 
     @SuppressLint("MissingPermission")
     private fun initCamera() {
-        backgroudThread = HandlerThread("camera handler")
-        backgroudThread.start()
-        backgroudHandler = Handler(backgroudThread.looper)
+        backgroundThread = HandlerThread("camera handler")
+        backgroundThread.start()
+        backgroundHandler = Handler(backgroundThread.looper)
 
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         //get camera list
         cameraList = cameraManager.cameraIdList
-
-        val characteristics = cameraManager.getCameraCharacteristics(cameraList!![0])
+        val cameraId = CameraCharacteristics.LENS_FACING_BACK
+        val characteristics = cameraManager.getCameraCharacteristics(cameraId.toString())
+        val streamConfigurationMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        val outputSize = streamConfigurationMap.getOutputSizes(SurfaceTexture::class.java)
+        val fpsRanges = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
         //open camera
-        cameraManager.openCamera(cameraList!![0], stateCallBack, backgroudHandler)
+        cameraManager.openCamera(cameraId.toString(), stateCallBack, backgroundHandler)
 
+    }
+
+    private lateinit var builder: CaptureRequest.Builder
+    private lateinit var request: CaptureRequest
+
+
+    private fun initCameraRequest() {
+        try {
+            builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
+            val surfaces = ArrayList<Surface>()
+            surfaceTexture.setDefaultBufferSize(800, 600)
+            val previewSurface = Surface(surfaceTexture)
+            surfaces.add(previewSurface)
+            builder.addTarget(previewSurface)
+            cameraDevice.createCaptureSession(surfaces, stateCallback, Handler())
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    private fun createCameraRequest() {
+        try {
+            builder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
+            request = builder.build()
+            cameraCaptureSession.setRepeatingRequest(request, captureCallback, Handler())
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
     }
 
     private val stateCallBack = object : CameraDevice.StateCallback() {
         override fun onOpened(camera: CameraDevice?) {
-
+            camera?.apply {
+                cameraDevice = this
+            }
         }
 
         override fun onDisconnected(camera: CameraDevice?) {
@@ -64,6 +107,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onConfigured(session: CameraCaptureSession?) {
+            session?.apply { cameraCaptureSession = session }
         }
 
     }
@@ -76,7 +120,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onSurfaceTextureDestroyed(surface: SurfaceTexture?): Boolean {
-            return false
+            return true
         }
 
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture?, width: Int, height: Int) {
