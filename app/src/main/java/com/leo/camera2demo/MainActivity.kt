@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initCameraRequest() {
         try {
-            builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
+            builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             val surfaces = ArrayList<Surface>()
             surfaceTexture.setDefaultBufferSize(800, 600)
             val previewSurface = Surface(surfaceTexture)
@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity() {
         override fun onOpened(camera: CameraDevice?) {
             camera?.apply {
                 cameraDevice = this
+                initCameraRequest()
             }
         }
 
@@ -107,7 +108,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onConfigured(session: CameraCaptureSession?) {
-            session?.apply { cameraCaptureSession = session }
+            session?.apply {
+                cameraCaptureSession = session
+                createCameraRequest()
+            }
         }
 
     }
